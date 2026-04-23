@@ -1,4 +1,5 @@
 from flask import Flask, request, send_file, jsonify
+from flask_cors import CORS
 import os
 import tempfile
 import uuid
@@ -6,9 +7,22 @@ from pathlib import Path
 import logging
 import subprocess
  
-app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+app = Flask(__name__)
+
+_cors_origins_env = os.environ.get("CORS_ORIGINS", "").strip()
+if _cors_origins_env:
+    _cors_origins = [o.strip() for o in _cors_origins_env.split(",") if o.strip()]
+    if _cors_origins:
+        CORS(
+            app,
+            resources={r"/*": {"origins": _cors_origins}},
+            allow_headers=["Content-Type"],
+            methods=["GET", "POST", "OPTIONS"],
+        )
+        logger.info("CORS enabled for origins: %s", _cors_origins)
  
 TEMP_DIR = tempfile.gettempdir()
  

@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DOCX → PDF (demo)</title>
+  <style>
+    :root { font-family: system-ui, sans-serif; max-width: 40rem; margin: 2rem auto; padding: 0 1rem; }
+    label { display: block; margin-top: 1rem; font-weight: 600; }
+    input[type="text"] { width: 100%; box-sizing: border-box; padding: 0.5rem; margin-top: 0.25rem; }
+    button { margin-top: 1rem; padding: 0.5rem 1rem; cursor: pointer; }
+    .err { color: #b00020; margin-top: 1rem; white-space: pre-wrap; }
+    .ok { color: #0d6b2c; margin-top: 1rem; }
+    iframe { width: 100%; height: 24rem; border: 1px solid #ccc; margin-top: 1rem; }
+    small { color: #555; }
+  </style>
+</head>
+<body>
+  <h1>DOCX → PDF</h1>
+  <p>Minimal browser client for the converter API. Set the API base URL to match your deployment (no trailing slash).</p>
+
+  <label for="apiBase">API base URL</label>
+  <input type="text" id="apiBase" placeholder="http://localhost:8080" />
+  <small>Saved in <code>localStorage</code> as <code>docxPdfApiBase</code>.</small>
+
+  <label for="file">.docx file</label>
+  <input type="file" id="file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" />
+
+  <div>
+    <button type="button" id="convert">Convert to PDF</button>
+  </div>
+
+  <div id="msg" class="err" aria-live="polite"></div>
+  <div id="ok" class="ok" aria-live="polite"></div>
+  <a id="download" style="display:none" download>Download PDF</a>
+  <iframe id="preview" title="PDF preview" style="display:none"></iframe>
+
+  <script>
+    (function () {
+      var STORAGE_KEY = "docxPdfApiBase";
+      var apiInput = document.getElementById("apiBase");
+      var fileInput = document.getElementById("file");
+      var btn = document.getElementById("convert");
+      var msg = document.getElementById("msg");
+      var ok = document.getElementById("ok");
+      var downloadA = document.getElementById("download");
+      var preview = document.getElementById("preview");
+      var lastObjectUrl = null;
+
+      function baseUrl() {
+        var u = (apiInput.value || "").trim().replace(/\/$/, "");
+        return u || "http://localhost:8080";
+      }
+
+      apiInput.value = localStorage.getItem(STORAGE_KEY) || "http://localhost:8080";
+      apiInput.addEventListener("change", function () {
+        localStorage.setItem(STORAGE_KEY, baseUrl());
+      });
+
+      function clearUi() {
+        msg.textContent = "";
+        ok.textContent = "";
+        downloadA.style.display = "none";
+        downloadA.removeAttribute("href");
+        preview.style.display = "none";
+        preview.removeAttribute("src");
+        if (lastObjectUrl) {
+          URL.revokeObjectURL(lastObjectUrl);
+          lastObjectUrl = null;
+        }
+      }
+
+      btn.addEventListener("click", async function () {
+        clearUi();
+        localStorage.setItem(STORAGE_KEY, baseUrl());
+
+        var f = fileInput.files && fileInput.files[0];
+        if (!f) {
+          msg.textContent = "Choose a .docx file.";
+          return;
+        }
+        if (!f.name.toLowerCase().endsWith(".docx")) {
+          msg.textContent = "File must be a .docx.";
+          return;
+        }
+
+        var fd = new FormData();
+        fd.append("file", f, f.name);
+
+        var url = baseUrl() + "/convert";
+        btn.disabled = true;
+        try {
+          var res = await fetch(url, { method: "POST", body: fd });
+          var ct = (res.headers.get("content-type") || "").toLowerCase();
+
+          if (!res.ok) {
+            if (ct.indexOf("application/json") !== -1) {
+              var j = await res.json();
+              msg.textContent = j.error || JSON.stringify(j);
+            } else {
+              msg.textContent = "HTTP " + res.status + " " + res.statusText;
+            }
+            return;
+          }
+
+          if (ct.indexOf("application/pdf") === -1) {
+            msg.textContent = "Unexpected response type: " + (ct || "(none)");
+            return;
+          }
+
+          var blob = await res.blob();
+          lastObjectUrl = URL.createObjectURL(blob);
+          var stem = f.name.replace(/\.docx$/i, "") || "document";
+          var pdfName = stem + ".pdf";
+
+          downloadA.href = lastObjectUrl;
+          downloadA.download = pdfName;
+          downloadA.textContent = "Download " + pdfName;
+          downloadA.style.display = "inline";
+          preview.src = lastObjectUrl;
+          preview.style.display = "block";
+          ok.textContent = "Conversion succeeded.";
+        } catch (e) {
+          msg.textContent = e && e.message ? e.message : String(e);
+        } finally {
+          btn.disabled = false;
+        }
+      });
+    })();
+  </script>
+</body>
+</html>
