@@ -66,3 +66,30 @@ git push -u origin main
 ```
 
 Use an empty new repo (no README) to avoid merge conflicts on first push.
+
+### Pushing workflow files (PAT scope)
+
+If `git push` is rejected with *refusing to allow a Personal Access Token to create or update workflow … without `workflow` scope*:
+
+- **Classic PAT:** enable the **`workflow`** scope when creating or editing the token.
+- **Fine-grained PAT:** under repository permissions, set **Actions** to **Read and write** (or equivalent for workflow updates).
+
+Do **not** embed a PAT in the Git remote URL (e.g. `https://token@github.com/...`). Prefer [Git Credential Manager](https://github.com/git-ecosystem/git-credential-manager), `gh auth login`, or SSH. **Revoke** any token that was ever stored in a URL or committed to history.
+
+## Azure one-time setup and CI variables
+
+The pipeline [`.github/workflows/deploy-container-apps.yml`](.github/workflows/deploy-container-apps.yml) expects Azure resources you create once (portal or CLI): resource group, **Azure Container Registry**, Log Analytics workspace, **Container Apps environment**, and a **Container App** with **external** ingress and target port **8080**, plus **`GET /health`** probes. Register `Microsoft.App` if needed (`az provider register -n Microsoft.App`).
+
+After the app exists and the first image is in ACR, configure GitHub **Actions**:
+
+| Type | Name | Purpose |
+|------|------|--------|
+| Secret | `AZURE_CLIENT_ID` | Entra app (OIDC) client ID |
+| Secret | `AZURE_TENANT_ID` | Directory (tenant) ID |
+| Secret | `AZURE_SUBSCRIPTION_ID` | Subscription ID |
+| Variable | `ACR_NAME` | Registry name (no `.azurecr.io`) |
+| Variable | `RESOURCE_GROUP` | Resource group of ACR and Container App |
+| Variable | `CONTAINER_APP_NAME` | Container App resource name |
+| Variable | `IMAGE_NAME` | Repository name in ACR (e.g. `docx-to-pdf`) |
+
+Grant the OIDC identity permission to run **`az acr build`** / push and **`az containerapp update`** on those resources (e.g. **Contributor** on the resource group, or narrower roles). Pushes to **`main`** build with `az acr build` and deploy the image tag `${{ github.sha }}`.
