@@ -8,6 +8,7 @@ Flask API that accepts a `.docx` upload and returns a PDF (LibreOffice headless 
 | `POST` | `/convert` | `multipart/form-data` field **`file`** (`.docx` only) → PDF bytes |
 | `GET` | `/` | API metadata |
 
+
 ## Run locally (Docker)
 
 From the repository root:
